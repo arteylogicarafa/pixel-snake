@@ -1,0 +1,4 @@
+tests/.tmp/
+.vercel/
+node_modules/
+*.log

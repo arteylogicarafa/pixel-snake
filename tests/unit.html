@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pixel Snake · tests</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="hud">
+      <div class="hud__scores">
+        <div class="score">
+          <span class="score__label">PUNTOS</span>
+          <span class="score__value" id="score">00000</span>
+        </div>
+        <div class="score score--best">
+          <span class="score__label">RÉCORD</span>
+          <span class="score__value" id="highscore">00000</span>
+        </div>
+      </div>
+      <div class="hud__actions">
+        <button id="btn-sound" class="icon-btn" type="button" aria-label="Desactivar sonido" aria-pressed="false">🔊</button>
+        <button id="btn-pause" class="icon-btn" type="button" aria-label="Pausar juego" disabled>⏸</button>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <canvas class="canvas" id="game" width="384" height="384" aria-label="Área de juego de Pixel Snake"></canvas>
+
+      <div class="new-record" id="new-record" hidden>¡NUEVO RÉCORD!</div>
+
+      <div class="overlay" id="overlay" hidden>
+        <section class="panel" id="panel-start" hidden>
+          <h1 class="title">PIXEL <span>SNAKE</span></h1>
+          <p class="subtitle">Come, crece y supera tu récord.</p>
+          <button class="btn" id="btn-play" type="button">JUGAR</button>
+          <p class="hint">o toca el área de juego para empezar</p>
+          <p class="keys">FLECHAS/WASD mover · P pausa · ENTER iniciar</p>
+          <p class="credits">By Rafa Guerrero</p>
+        </section>
+
+        <section class="panel" id="panel-pause" hidden>
+          <h2>PAUSA</h2>
+          <p class="subtitle">La serpiente espera.</p>
+          <button class="btn" id="btn-resume" type="button">CONTINUAR</button>
+        </section>
+
+        <section class="panel" id="panel-over" hidden>
+          <h2>GAME OVER</h2>
+          <p class="result">PUNTOS: <span id="final-score">0</span></p>
+          <p class="result">RÉCORD: <b id="final-best">0</b></p>
+          <button class="btn" id="btn-restart" type="button">JUGAR DE NUEVO</button>
+        </section>
+      </div>
+    </main>
+
+    <footer class="controls" aria-label="Controles del juego">
+      <div class="dpad">
+        <button class="ctrl ctrl--up" id="btn-up" type="button" aria-label="Mover arriba">
+          <span class="ctrl__icon" aria-hidden="true">▲</span>
+        </button>
+        <button class="ctrl ctrl--left" id="btn-left" type="button" aria-label="Mover izquierda">
+          <span class="ctrl__icon" aria-hidden="true">◀</span>
+        </button>
+        <button class="ctrl ctrl--down" id="btn-down" type="button" aria-label="Mover abajo">
+          <span class="ctrl__icon" aria-hidden="true">▼</span>
+        </button>
+        <button class="ctrl ctrl--right" id="btn-right" type="button" aria-label="Mover derecha">
+          <span class="ctrl__icon" aria-hidden="true">▶</span>
+        </button>
+      </div>
+      <p class="ctrl-hint">Desliza sobre el tablero o usa el pad</p>
+    </footer>
+  </div>
+
+  <h1 style="font-family:monospace">Pixel Snake · suite de tests</h1>
+  <pre id="out">RUNNING</pre>
+
+  <script type="module">
+    import { Game, COLS, ROWS, VIEW } from '../js/game.js';
+    import { rectsOverlap, cellRect, insideBounds, checkCollision } from '../js/collision.js';
+    import { Snake, START_LENGTH } from '../js/snake.js';
+    import { FoodField, GOLD_TTL } from '../js/food.js';
+    import { getHighScore, saveHighScore, getMuted, setMuted } from '../js/storage.js';
+    import { initUI, setScore, showState, showGameOver, setMuted as setMutedUI } from '../js/ui.js';
+    import { initInput } from '../js/input.js';
+    import { setAudioMuted, isAudioMuted } from '../js/audio.js';
+
+    /* =========================================================
+       Shim determinista de requestAnimationFrame:
+       los frames se bombean a mano con virtual time
+       ========================================================= */
+    let vnow = 0;
+    let idSeq = 1;
+    const queue = [];
+    window.requestAnimationFrame = (cb) => {
+      const id = idSeq++;
+      queue.push({ id, cb });
+      return id;
+    };
+    window.cancelAnimationFrame = (id) => {
+      const i = queue.findIndex((t) => t.id === id);
+      if (i >= 0) queue.splice(i, 1);
+    };
+    function frame(ms = 16.67) {
+      vnow += ms;
+      queue.splice(0).forEach((t) => t.cb(vnow));
+    }
+    function frames(n, ms) {
+      for (let i = 0; i < n; i++) frame(ms);
+    }
+    function pumpUntil(fn, ms = 10, max = 400) {
+      let n = 0;
+      while (!fn() && n < max) {
+        frame(ms);
+        n++;
+      }
+      return fn();
+    }
+
+    /* =========================================================
+       Mini-assertions
+       ========================================================= */
+    const results = [];
+    function ok(name, cond, detail) {
+      results.push({ name, pass: !!cond, detail: cond ? '' : String(detail || 'condición falsa') });
+    }
+    function eq(name, got, want) {
+      const pass = Object.is(got, want);
+      results.push({
+        name,
+        pass,
+        detail: pass ? '' : 'esperado=' + String(want) + ' obtenido=' + String(got)
+      });
+    }
+
+    function render() {
+      const pass = results.filter((r) => r.pass).length;
+      const fail = results.length - pass;
+      const lines = results.map((r) => (r.pass ? 'PASS ' : 'FAIL ') + r.name + (r.pass ? '' : ' :: ' + r.detail));
+      lines.push('SUMMARY total=' + results.length + ' pass=' + pass + ' fail=' + fail);
+      document.getElementById('out').textContent = lines.join('\n');
+      document.body.dataset.test = fail === 0 ? 'ok' : 'ko';
+    }
+
+    /* =========================================================
+       Suite
+       ========================================================= */
+    async function run() {
+      const KEY_SCORE = 'pixelSnakeHighScore';
+      const KEY_MUTE = 'pixelSnakeMuted';
+      localStorage.removeItem(KEY_SCORE);
+      localStorage.removeItem(KEY_MUTE);
+
+      /* ---------- 1. estructura de index.html ---------- */
+      const html = await fetch('../index.html').then((r) => r.text());
+      const mainSrc = await fetch('../js/main.js').then((r) => r.text());
+      ok('html:manifest', html.includes('rel="manifest"'));
+      ok('html:modulos-es6', html.includes('type="module"') && html.includes('js/main.js'));
+      ok('html:pad-tactil', ['btn-up', 'btn-down', 'btn-left', 'btn-right'].every((id) => html.includes('id="' + id + '"')));
+      ok('html:pantallas', ['panel-start', 'panel-pause', 'panel-over'].every((id) => html.includes('id="' + id + '"')));
+      ok('pwa:registro-service-worker', mainSrc.includes('serviceWorker.register'));
+
+      /* ---------- 2. colisiones AABB ---------- */
+      ok('collision:solape', rectsOverlap({ x: 0, y: 0, w: 10, h: 10 }, { x: 5, y: 5, w: 10, h: 10 }));
+      ok('collision:separado', !rectsOverlap({ x: 0, y: 0, w: 10, h: 10 }, { x: 20, y: 0, w: 10, h: 10 }));
+      ok('collision:solo-borde', !rectsOverlap({ x: 0, y: 0, w: 10, h: 10 }, { x: 10, y: 0, w: 10, h: 10 }));
+      const cr = cellRect(2, 3, 24);
+      ok('collision:cellRect', cr.x === 48 && cr.y === 72 && cr.w === 24 && cr.h === 24);
+      ok('collision:bounds',
+        insideBounds({ x: 0, y: 0, w: VIEW, h: VIEW }, VIEW, VIEW) &&
+        !insideBounds({ x: -1, y: 0, w: 24, h: 24 }, VIEW, VIEW));
+      ok('collision:hitbox', checkCollision({ hitbox: { x: 0, y: 0, w: 5, h: 5 } }, { x: 3, y: 3, w: 5, h: 5 }));
+
+      /* ---------- 3. snake ---------- */
+      const sn = new Snake(COLS, ROWS);
+      eq('snake:longitud-inicial', sn.length, START_LENGTH);
+      eq('snake:direccion-inicial', sn.dir, 'right');
+      eq('snake:cabeza-inicial-x', sn.head.x, 5);
+      ok('snake:rechaza-180', sn.queueDir('left') === false);
+
+      const s1 = new Snake(COLS, ROWS);
+      const hx = s1.head.x;
+      const hy = s1.head.y;
+      s1.step();
+      ok('snake:step-avanza', s1.head.x === hx + 1 && s1.head.y === hy);
+
+      const s2 = new Snake(COLS, ROWS);
+      s2.queueDir('up');
+      const upHead = s2.step();
+      ok('snake:gira-arriba', upHead.x === 5 && upHead.y === hy - 1);
+
+      const s3 = new Snake(COLS, ROWS);
+      const len0 = s3.length;
+      s3.grow();
+      eq('snake:grow', s3.length, len0 + 1);
+      s3.step();
+      s3.step();
+      eq('snake:crecimiento-persiste', s3.length, len0 + 1);
+
+      const s4 = new Snake(COLS, ROWS);
+      ok('snake:cola-max-2',
+        s4.queueDir('up') === true &&
+        s4.queueDir('left') === true &&
+        s4.queueDir('down') === false);
+
+      ok('snake:occupies', sn.occupies(5, 8) && !sn.occupies(0, 0));
+
+      /* ---------- 4. comida ---------- */
+      const ff = new FoodField(COLS, ROWS);
+      const sf = new Snake(COLS, ROWS);
+      ff.spawn(sf);
+      ok('food:manzana-en-tablero',
+        ff.apple &&
+        ff.apple.x >= 0 && ff.apple.x < COLS &&
+        ff.apple.y >= 0 && ff.apple.y < ROWS);
+      ok('food:manzana-libre', ff.apple && !sf.occupies(ff.apple.x, ff.apple.y));
+
+      ff.gold = { x: 1, y: 1, ttl: GOLD_TTL };
+      ff.update(GOLD_TTL + 0.5);
+      ok('food:gold-caduca', ff.gold === null);
+
+      const ff2 = new FoodField(COLS, ROWS);
+      const sf2 = new Snake(COLS, ROWS);
+      ff2.spawn(sf2);
+      for (let i = 0; i < 5; i++) ff2.onAppleEaten(sf2);
+      ok('food:gold-aparece-cada-5', ff2.gold !== null);
+
+      /* ---------- 5. game (bucle con rAF shim) ---------- */
+      let lastAction = null;
+      const events = { state: null, score: null, over: null };
+
+      const ui = initUI({
+        onPlay: () => game.start(),
+        onRestart: () => game.start(),
+        onResume: () => game.resume(),
+        onPauseToggle: () => game.togglePause(),
+        onTapStart: () => game.start(),
+        onSoundToggle: () => setMuted(!getMuted())
+      });
+
+      const game = new Game(document.getElementById('game'), document.getElementById('stage'), {
+        onScore: (s, h) => { events.score = [s, h]; setScore(s, h); },
+        onState: (st) => { events.state = st; showState(st); },
+        onGameOver: (r) => { events.over = r; showGameOver(r); }
+      });
+
+      initInput({
+        onAction: (a) => { lastAction = a; game.handle(a); }
+      });
+
+      game.fit();
+      game.startMenu();
+      eq('game:estado-inicial', game.state, 'menu');
+      eq('game:evento-menu', events.state, 'menu');
+
+      game.handle('confirm');
+      eq('game:inicia', game.state, 'playing');
+
+      game.food.apple = { x: 14, y: 14 };
+      const head0 = { x: game.snake.head.x, y: game.snake.head.y };
+      frames(20);
+      eq('game:avanza-un-turno', game.snake.head.x, head0.x + 1);
+
+      game.food.apple = { x: game.snake.head.x + 1, y: game.snake.head.y };
+      const lenBefore = game.snake.length;
+      pumpUntil(() => game.score > 0);
+      eq('game:come-manazana', game.score, 10);
+      eq('game:crece', game.snake.length, lenBefore + 1);
+
+      game.handle('pause');
+      eq('game:pausa', game.state, 'paused');
+      const frozen = { x: game.snake.head.x, y: game.snake.head.y };
+      frames(10);
+      ok('game:pausa-congela',
+        game.snake.head.x === frozen.x && game.snake.head.y === frozen.y);
+      game.handle('pause');
+      eq('game:reanuda', game.state, 'playing');
+
+      game.handle('left');
+      eq('game:ignora-inversa', game.snake.dir, 'right');
+
+      game.snake.body = [
+        { x: COLS - 1, y: 2 },
+        { x: COLS - 2, y: 2 },
+        { x: COLS - 3, y: 2 }
+      ];
+      game.snake.queue = [];
+      game.snake.dir = 'right';
+      game.food.gold = null;
+      game.food.apple = { x: 1, y: 1 };
+      pumpUntil(() => game.state === 'dead');
+      eq('game:muerde-pared', game.state, 'dead');
+
+      pumpUntil(() => events.over !== null);
+      ok('game:game-over-disparado', events.over !== null);
+      eq('game:score-final', events.over && events.over.score, 10);
+      eq('game:best', events.over && events.over.best, 10);
+      ok('game:nuevo-record', events.over && events.over.isNew === true);
+      eq('game:persiste-record', localStorage.getItem(KEY_SCORE), '10');
+
+      /* ---------- 6. interfaz DOM ---------- */
+      game.startMenu();
+      ok('ui:menu-visible',
+        !document.getElementById('overlay').hidden &&
+        !document.getElementById('panel-start').hidden);
+      game.handle('confirm');
+      ok('ui:playing-oculta-overlay', document.getElementById('overlay').hidden);
+      game.handle('pause');
+      ok('ui:pausa-visible', !document.getElementById('panel-pause').hidden);
+      game.handle('pause');
+
+      setMutedUI(true);
+      eq('ui:mute-on', document.getElementById('btn-sound').getAttribute('aria-pressed'), 'true');
+      setMutedUI(false);
+      eq('ui:mute-off', document.getElementById('btn-sound').getAttribute('aria-pressed'), 'false');
+
+      const rUp = document.getElementById('btn-up').getBoundingClientRect();
+      const rRight = document.getElementById('btn-right').getBoundingClientRect();
+      ok('ui:pad-min-55px',
+        rUp.width >= 55 && rUp.height >= 55 &&
+        rRight.width >= 55 && rRight.height >= 55,
+        'up=' + Math.round(rUp.width) + 'x' + Math.round(rUp.height));
+
+      ok('ui:sin-scroll-horizontal',
+        document.documentElement.scrollWidth <= window.innerWidth + 1,
+        'scrollWidth=' + document.documentElement.scrollWidth + ' inner=' + window.innerWidth);
+
+      /* ---------- 7. teclado ---------- */
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowUp' }));
+      eq('input:teclado-up', lastAction, 'up');
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyP' }));
+      eq('input:teclado-pausa', lastAction, 'pause');
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyP' }));
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter' }));
+      eq('input:teclado-enter', lastAction, 'confirm');
+
+      /* ---------- 8. audio ---------- */
+      setAudioMuted(true);
+      ok('audio:mute', isAudioMuted() === true);
+      setAudioMuted(false);
+      ok('audio:unmute', isAudioMuted() === false);
+
+      /* ---------- 9. storage ---------- */
+      eq('storage:guarda-record', saveHighScore(120), true);
+      eq('storage:lee-record', getHighScore(), 120);
+      eq('storage:no-regresa', saveHighScore(50), false);
+      eq('storage:mantiene-max', getHighScore(), 120);
+      eq('storage:persiste-record', localStorage.getItem(KEY_SCORE), '120');
+      setMuted(true);
+      ok('storage:mute-true', getMuted() === true);
+      setMuted(false);
+      ok('storage:mute-false', getMuted() === false);
+    }
+
+    run()
+      .catch((err) => {
+        ok('suite:sin-excepciones', false, (err && err.message) || String(err));
+      })
+      .finally(() => render());
+  </script>
+</body>
+</html>

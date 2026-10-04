@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Pixel Snake</title>
+  <meta name="description" content="Pixel Snake by Rafa Guerrero - come, crece y supera tu récord en este snake 2D pixel-art ligero e instalable.">
+  <meta name="theme-color" content="#0a0f1c">
+  <meta name="color-scheme" content="dark">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Pixel Snake">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+  <!-- ===== LOADING ===== -->
+  <div class="loading" id="loading" role="status" aria-live="polite">
+    <img class="loading__logo" id="loading-logo" src="./assets/images/logo.png" alt="Pixel Snake - by Rafa Guerrero" width="1068" height="959">
+    <div class="loading__bar" aria-hidden="true"><i></i></div>
+    <p class="loading__text">CARGANDO...</p>
+  </div>
+
+  <div class="app">
+
+    <!-- ===== 1. BARRA SUPERIOR ===== -->
+    <header class="hud">
+      <div class="hud__scores">
+        <div class="score">
+          <span class="score__label">PUNTOS</span>
+          <span class="score__value" id="score">00000</span>
+        </div>
+        <div class="score score--best">
+          <span class="score__label">RÉCORD</span>
+          <span class="score__value" id="highscore">00000</span>
+        </div>
+      </div>
+      <div class="hud__actions">
+        <button id="btn-sound" class="icon-btn" type="button" aria-label="Desactivar sonido" aria-pressed="false">🔊</button>
+        <button id="btn-pause" class="icon-btn" type="button" aria-label="Pausar juego" disabled>⏸</button>
+      </div>
+    </header>
+
+    <!-- ===== 2. ÁREA DE JUEGO ===== -->
+    <main class="stage" id="stage">
+      <canvas class="canvas" id="game" width="384" height="384" aria-label="Área de juego de Pixel Snake"></canvas>
+
+      <div class="new-record" id="new-record" hidden>¡NUEVO RÉCORD!</div>
+
+      <div class="overlay" id="overlay" hidden>
+        <section class="panel" id="panel-start" hidden>
+          <h1 class="title">PIXEL <span>SNAKE</span></h1>
+          <p class="subtitle">Come, crece y supera tu récord.</p>
+          <button class="btn" id="btn-play" type="button">JUGAR</button>
+          <p class="hint">o toca el área de juego para empezar</p>
+          <p class="keys">FLECHAS/WASD mover · P pausa · ENTER iniciar</p>
+          <p class="credits">By Rafa Guerrero</p>
+        </section>
+
+        <section class="panel" id="panel-pause" hidden>
+          <h2>PAUSA</h2>
+          <p class="subtitle">La serpiente espera.</p>
+          <button class="btn" id="btn-resume" type="button">CONTINUAR</button>
+        </section>
+
+        <section class="panel" id="panel-over" hidden>
+          <h2>GAME OVER</h2>
+          <p class="result">PUNTOS: <span id="final-score">0</span></p>
+          <p class="result">RÉCORD: <b id="final-best">0</b></p>
+          <button class="btn" id="btn-restart" type="button">JUGAR DE NUEVO</button>
+        </section>
+      </div>
+    </main>
+
+    <!-- ===== 3. CONTROLES TÁCTILES ===== -->
+    <footer class="controls" aria-label="Controles del juego">
+      <div class="dpad">
+        <button class="ctrl ctrl--up" id="btn-up" type="button" aria-label="Mover arriba">
+          <span class="ctrl__icon" aria-hidden="true">▲</span>
+        </button>
+        <button class="ctrl ctrl--left" id="btn-left" type="button" aria-label="Mover izquierda">
+          <span class="ctrl__icon" aria-hidden="true">◀</span>
+        </button>
+        <button class="ctrl ctrl--down" id="btn-down" type="button" aria-label="Mover abajo">
+          <span class="ctrl__icon" aria-hidden="true">▼</span>
+        </button>
+        <button class="ctrl ctrl--right" id="btn-right" type="button" aria-label="Mover derecha">
+          <span class="ctrl__icon" aria-hidden="true">▶</span>
+        </button>
+      </div>
+      <p class="ctrl-hint">Desliza sobre el tablero o usa el pad</p>
+    </footer>
+  </div>
+
+  <noscript>
+    <p style="padding:20px;text-align:center;font-family:monospace">Pixel Snake necesita JavaScript para funcionar.</p>
+  </noscript>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

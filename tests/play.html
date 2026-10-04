@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pixel Snake · partida de muestra</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="hud">
+      <div class="hud__scores">
+        <div class="score">
+          <span class="score__label">PUNTOS</span>
+          <span class="score__value" id="score">00000</span>
+        </div>
+        <div class="score score--best">
+          <span class="score__label">RÉCORD</span>
+          <span class="score__value" id="highscore">00000</span>
+        </div>
+      </div>
+      <div class="hud__actions">
+        <button id="btn-sound" class="icon-btn" type="button" aria-label="Desactivar sonido" aria-pressed="false">🔊</button>
+        <button id="btn-pause" class="icon-btn" type="button" aria-label="Pausar juego" disabled>⏸</button>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <canvas class="canvas" id="game" width="384" height="384" aria-label="Área de juego de Pixel Snake"></canvas>
+
+      <div class="new-record" id="new-record" hidden>¡NUEVO RÉCORD!</div>
+
+      <div class="overlay" id="overlay" hidden>
+        <section class="panel" id="panel-start" hidden>
+          <h1 class="title">PIXEL <span>SNAKE</span></h1>
+        </section>
+        <section class="panel" id="panel-pause" hidden>
+          <h2>PAUSA</h2>
+        </section>
+        <section class="panel" id="panel-over" hidden>
+          <h2>GAME OVER</h2>
+        </section>
+      </div>
+    </main>
+
+    <footer class="controls" aria-label="Controles del juego">
+      <div class="dpad">
+        <button class="ctrl ctrl--up" id="btn-up" type="button" aria-label="Mover arriba">
+          <span class="ctrl__icon" aria-hidden="true">▲</span>
+        </button>
+        <button class="ctrl ctrl--left" id="btn-left" type="button" aria-label="Mover izquierda">
+          <span class="ctrl__icon" aria-hidden="true">◀</span>
+        </button>
+        <button class="ctrl ctrl--down" id="btn-down" type="button" aria-label="Mover abajo">
+          <span class="ctrl__icon" aria-hidden="true">▼</span>
+        </button>
+        <button class="ctrl ctrl--right" id="btn-right" type="button" aria-label="Mover derecha">
+          <span class="ctrl__icon" aria-hidden="true">▶</span>
+        </button>
+      </div>
+      <p class="ctrl-hint">Desliza sobre el tablero o usa el pad</p>
+    </footer>
+  </div>
+
+  <script type="module">
+    /* Escena fija de partida para capturas de pantalla */
+    import { Game } from '../js/game.js';
+    import { initUI, setScore, showState, showGameOver, setMuted } from '../js/ui.js';
+    import { initInput } from '../js/input.js';
+    import { setAudioMuted } from '../js/audio.js';
+
+    const canvas = document.getElementById('game');
+    const stage = document.getElementById('stage');
+
+    let game = null;
+
+    const ui = initUI({
+      onPlay: () => game.start(),
+      onRestart: () => game.start(),
+      onResume: () => game.resume(),
+      onPauseToggle: () => game.togglePause(),
+      onTapStart: () => game.start(),
+      onSoundToggle: () => {}
+    });
+
+    game = new Game(canvas, stage, {
+      onScore: (s, h) => setScore(s, h),
+      onState: (st) => showState(st),
+      onGameOver: (r) => showGameOver(r)
+    });
+
+    initInput({ onAction: (a) => game.handle(a) });
+    setAudioMuted(true);
+    setMuted(false);
+
+    game.fit();
+    game.state = 'playing';
+    game.snake.body = [
+      { x: 9, y: 8 },
+      { x: 8, y: 8 },
+      { x: 7, y: 8 },
+      { x: 7, y: 9 },
+      { x: 7, y: 10 },
+      { x: 6, y: 10 },
+      { x: 5, y: 10 },
+      { x: 4, y: 10 },
+      { x: 4, y: 9 },
+      { x: 4, y: 8 }
+    ];
+    game.snake.dir = 'right';
+    game.snake.queue = [];
+    game.food.apple = { x: 12, y: 8 };
+    game.food.gold = { x: 12, y: 3, ttl: 5 };
+    game.score = 240;
+    game.time = 0.4;
+    game.pushScore();
+    showState('playing');
+    game.draw();
+  </script>
+</body>
+</html>
