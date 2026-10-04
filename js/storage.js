@@ -4,9 +4,11 @@
 
 const KEY_SCORE = 'pixelSnakeHighScore';
 const KEY_MUTE = 'pixelSnakeMuted';
+const KEY_PAL = 'pixelSnakePalette';
 
 let memScore = 0;
 let memMute = false;
+let memPalette = null;
 
 function safeGet(key) {
   try {
@@ -48,4 +50,15 @@ export function getMuted() {
 export function setMuted(value) {
   memMute = !!value;
   safeSet(KEY_MUTE, memMute ? '1' : '0');
+}
+
+export function getPalette() {
+  if (memPalette) return memPalette;
+  memPalette = safeGet(KEY_PAL) || 'verde';
+  return memPalette;
+}
+
+export function setPalette(value) {
+  memPalette = String(value || 'verde');
+  safeSet(KEY_PAL, memPalette);
 }

@@ -2,11 +2,16 @@
    main.js · arranque, wiring y registro del service worker
    ========================================================= */
 
-import { Game } from './game.js';
+import { Game, SNAKE_PALETTES } from './game.js';
 import { initInput } from './input.js';
-import { initUI, setScore, showState, showGameOver, setMuted } from './ui.js';
+import { initUI, setScore, showState, showGameOver, setMuted, setPaletteUI } from './ui.js';
 import { playSfx, setAudioMuted, isAudioMuted, unlockAudio } from './audio.js';
-import { getMuted, setMuted as persistMuted } from './storage.js';
+import {
+  getMuted,
+  setMuted as persistMuted,
+  getPalette,
+  setPalette as persistPalette
+} from './storage.js';
 
 const canvas = document.getElementById('game');
 const stage = document.getElementById('stage');
@@ -25,6 +30,12 @@ const ui = initUI({
     persistMuted(next);
     setMuted(next);
     if (!next) playSfx('btn');
+  },
+  onColorToggle: () => {
+    const next = game.cyclePalette();
+    persistPalette(next);
+    setPaletteUI(next, SNAKE_PALETTES[next].snake);
+    playSfx('btn');
   }
 });
 
@@ -39,6 +50,9 @@ initInput({ onAction: (action) => game.handle(action) });
 const muted = getMuted();
 setAudioMuted(muted);
 setMuted(muted);
+
+const palette = getPalette();
+setPaletteUI(palette, SNAKE_PALETTES[palette].snake);
 
 game.fit();
 game.startMenu();

@@ -6,31 +6,37 @@
 
 import { Snake, DIRS } from './snake.js';
 import { FoodField, NORMAL_PTS, GOLD_PTS } from './food.js';
-import { rectsOverlap, cellRect, insideBounds } from './collision.js';
+import { rectsOverlap, cellRect } from './collision.js';
 import { playSfx } from './audio.js';
-import { getHighScore, saveHighScore } from './storage.js';
+import { getHighScore, saveHighScore, getPalette } from './storage.js';
 
 export const COLS = 16;
 export const ROWS = 16;
 export const CELL = 24;
 export const VIEW = COLS * CELL;
 
-const BASE_STEP = 0.17;
+const BASE_STEP = 0.19;
 const MIN_STEP = 0.085;
 const STEP_DECAY = 0.011;
 const DEAD_REPORT = 0.5;
+const SLOW_MULT = 1.6;
+const SLOW_TIME = 6;
+const CLOCK_SPAWN_EVERY = 9;
+
+/* paletas de color de la serpiente (selector en el HUD) */
+export const SNAKE_PALETTES = {
+  verde: { snake: '#3ddc84', snakeAlt: '#2bbd72', snakeHi: '#a7ffcf', snakeLo: '#178a52', head: '#4ff29a', outline: '#05240f' },
+  azul: { snake: '#4cc9f0', snakeAlt: '#35a8cb', snakeHi: '#c4f3ff', snakeLo: '#1e7fa3', head: '#6ad9ff', outline: '#03222e' },
+  morado: { snake: '#b18cff', snakeAlt: '#9774e8', snakeHi: '#e6d8ff', snakeLo: '#7350c9', head: '#c6a4ff', outline: '#1c0f3d' },
+  naranja: { snake: '#ff9f1c', snakeAlt: '#e58a0f', snakeHi: '#ffe0b0', snakeLo: '#c26f00', head: '#ffb64d', outline: '#2c1500' },
+  rosa: { snake: '#ff7a9c', snakeAlt: '#e8628a', snakeHi: '#ffd4de', snakeLo: '#c73f61', head: '#ff9db8', outline: '#2c0713' }
+};
 
 const PALETTE = {
   board: '#0f1730',
   boardAlt: '#131e3c',
   frame: '#26325c',
   frameHi: '#3b4b85',
-  snake: '#3ddc84',
-  snakeAlt: '#2bbd72',
-  snakeHi: '#a7ffcf',
-  snakeLo: '#178a52',
-  outline: '#05240f',
-  head: '#4ff29a',
   apple: '#ff4d6d',
   appleHi: '#ffc2cf',
   appleLo: '#c1173a',
@@ -39,8 +45,10 @@ const PALETTE = {
   gold: '#ffd23f',
   goldHi: '#fff7cf',
   goldLo: '#c99a00',
-  tongue: '#ff7a9c',
-  eye: '#05240f'
+  clockFrame: '#6ee7ff',
+  clockFace: '#e9feff',
+  clockDark: '#0b3a4a',
+  tongue: '#ff7a9c'
 };
 
 function rand(min, max) {
@@ -63,6 +71,8 @@ export class Game {
     this.scale = 1;
 
     this.high = getHighScore();
+    this.paletteName = 'verde';
+    this.palette = SNAKE_PALETTES.verde;
 
     this.raf = 0;
     this.lastT = 0;
@@ -74,9 +84,27 @@ export class Game {
     this.reported = false;
     this.shownScore = -1;
     this.shownHigh = -1;
+    this.slowT = 0;
+    this.clockTimer = 0;
 
+    this.setPalette(getPalette());
     this.reset();
     this.loop = this.loop.bind(this);
+  }
+
+  /* ---------------- paletas de color ---------------- */
+
+  setPalette(name) {
+    this.paletteName = SNAKE_PALETTES[name] ? name : 'verde';
+    this.palette = SNAKE_PALETTES[this.paletteName];
+    this.draw();
+    return this.paletteName;
+  }
+
+  cyclePalette() {
+    const names = Object.keys(SNAKE_PALETTES);
+    const i = names.indexOf(this.paletteName);
+    return this.setPalette(names[(i + 1) % names.length]);
   }
 
   /* ---------------- ciclo de vida ---------------- */
@@ -85,6 +113,7 @@ export class Game {
     this.snake.reset();
     this.food.reset();
     this.food.spawn(this.snake);
+    this.food.spawnClock(this.snake);
     this.particles.length = 0;
     this.score = 0;
     this.elapsed = 0;
@@ -93,6 +122,8 @@ export class Game {
     this.reported = false;
     this.shownScore = -1;
     this.shownHigh = -1;
+    this.slowT = 0;
+    this.clockTimer = 0;
   }
 
   startMenu() {
@@ -180,7 +211,8 @@ export class Game {
   }
 
   stepInterval() {
-    return Math.max(MIN_STEP, BASE_STEP - this.food.eaten * STEP_DECAY);
+    const base = Math.max(MIN_STEP, BASE_STEP - this.food.eaten * STEP_DECAY);
+    return this.slowT > 0 ? base * SLOW_MULT : base;
   }
 
   update(dt) {
@@ -188,6 +220,14 @@ export class Game {
     this.elapsed += dt;
     this.food.update(dt);
     this.updateFx(dt);
+
+    if (this.slowT > 0) this.slowT = Math.max(0, this.slowT - dt);
+
+    this.clockTimer += dt;
+    if (!this.food.clock && this.slowT <= 0 && this.clockTimer >= CLOCK_SPAWN_EVERY) {
+      this.food.spawnClock(this.snake);
+      this.clockTimer = 0;
+    }
 
     this.acc += dt;
     const step = this.stepInterval();
@@ -220,15 +260,17 @@ export class Game {
     }
   }
 
-  /* un turno de la serpiente: mover, comer, chocar */
+  /* un turno de la serpiente: mover (las paredes se atraviesan), comer, chocar */
   tick() {
     const head = this.snake.step();
-    const hr = cellRect(head.x, head.y, CELL);
 
-    if (!insideBounds(hr, VIEW, VIEW)) {
-      this.die();
-      return;
-    }
+    /* wrap: salir por un borde entra por el opuesto, sin morir */
+    if (head.x < 0) head.x = COLS - 1;
+    else if (head.x >= COLS) head.x = 0;
+    if (head.y < 0) head.y = ROWS - 1;
+    else if (head.y >= ROWS) head.y = 0;
+
+    const hr = cellRect(head.x, head.y, CELL);
 
     const apple = this.food.apple;
     if (apple && rectsOverlap(hr, cellRect(apple.x, apple.y, CELL))) {
@@ -239,7 +281,7 @@ export class Game {
       this.snake.grow();
       playSfx('eat');
       this.burst(apple.x * CELL + CELL / 2, apple.y * CELL + CELL / 2, 8,
-        [PALETTE.apple, PALETTE.appleHi, PALETTE.snakeHi]);
+        [PALETTE.apple, PALETTE.appleHi, this.palette.snakeHi]);
       this.pushScore();
     }
 
@@ -249,8 +291,18 @@ export class Game {
       this.food.eatGold();
       playSfx('gold');
       this.burst(gold.x * CELL + CELL / 2, gold.y * CELL + CELL / 2, 12,
-        [PALETTE.gold, PALETTE.goldHi, PALETTE.snakeHi]);
+        [PALETTE.gold, PALETTE.goldHi, this.palette.snakeHi]);
       this.pushScore();
+    }
+
+    const clock = this.food.clock;
+    if (clock && rectsOverlap(hr, cellRect(clock.x, clock.y, CELL))) {
+      this.food.eatClock();
+      this.slowT = SLOW_TIME;
+      this.clockTimer = 0;
+      playSfx('clock');
+      this.burst(clock.x * CELL + CELL / 2, clock.y * CELL + CELL / 2, 10,
+        [PALETTE.clockFrame, PALETTE.clockFace, '#ffffff']);
     }
 
     const body = this.snake.body;
@@ -273,7 +325,7 @@ export class Game {
     playSfx('die');
     const h = this.snake.head;
     this.burst(h.x * CELL + CELL / 2, h.y * CELL + CELL / 2, 18,
-      [PALETTE.snake, PALETTE.snakeHi, PALETTE.snakeLo]);
+      [this.palette.snake, this.palette.snakeHi, this.palette.snakeLo]);
     this.pushScore();
     if (this.hooks.onState) this.hooks.onState('dead');
   }
@@ -352,6 +404,7 @@ export class Game {
     this.drawBoard(ctx);
     this.drawFood(ctx);
     this.drawSnake(ctx);
+    this.drawSlowPill(ctx);
     this.drawFx(ctx);
   }
 
@@ -409,10 +462,52 @@ export class Game {
       ctx.fillRect(x + 8, y + 7, 4, 4);
       ctx.globalAlpha = 1;
     }
+
+    const clock = this.food.clock;
+    if (clock) {
+      const blink = clock.ttl < 2 && Math.floor(this.time * 6) % 2 === 0;
+      ctx.globalAlpha = blink ? 0.35 : 1;
+      const x = clock.x * CELL;
+      const y = clock.y * CELL + Math.round(Math.sin(this.time * 3 + 1) * 1.5);
+      ctx.fillStyle = PALETTE.clockDark;
+      ctx.fillRect(x + 11, y + 2, 3, 3);
+      ctx.fillStyle = PALETTE.clockFrame;
+      ctx.fillRect(x + 4, y + 4, 16, 16);
+      ctx.fillStyle = PALETTE.clockFace;
+      ctx.fillRect(x + 6, y + 6, 12, 12);
+      ctx.fillStyle = PALETTE.clockDark;
+      ctx.fillRect(x + 11, y + 7, 2, 5);
+      ctx.fillRect(x + 11, y + 11, 4, 2);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /* indicador del efecto ralentizador activo */
+  drawSlowPill(ctx) {
+    if (this.slowT <= 0) return;
+    const x = 10;
+    const y = 10;
+    const w = 46;
+    const h = 16;
+    ctx.fillStyle = 'rgba(5, 8, 15, 0.82)';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = PALETTE.clockFrame;
+    ctx.fillRect(x + 3, y + 3, 10, 10);
+    ctx.fillStyle = PALETTE.clockFace;
+    ctx.fillRect(x + 5, y + 5, 6, 6);
+    ctx.fillStyle = PALETTE.clockDark;
+    ctx.fillRect(x + 7, y + 6, 1, 3);
+    ctx.fillRect(x + 7, y + 8, 3, 1);
+    ctx.fillStyle = '#e8f5ff';
+    ctx.font = 'bold 10px ui-monospace, monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(Math.ceil(this.slowT) + 's', x + 17, y + h / 2 + 1);
   }
 
   drawSnake(ctx) {
     const body = this.snake.body;
+    const P = this.palette;
     for (let i = body.length - 1; i >= 0; i--) {
       const seg = body[i];
       if (seg.x < 0 || seg.y < 0 || seg.x >= COLS || seg.y >= ROWS) continue;
@@ -421,15 +516,15 @@ export class Game {
       const isHead = i === 0;
       const alt = i % 2 === 1;
 
-      ctx.fillStyle = PALETTE.outline;
+      ctx.fillStyle = P.outline;
       ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
 
-      ctx.fillStyle = isHead ? PALETTE.head : alt ? PALETTE.snakeAlt : PALETTE.snake;
+      ctx.fillStyle = isHead ? P.head : alt ? P.snakeAlt : P.snake;
       ctx.fillRect(x + 3, y + 3, CELL - 6, CELL - 6);
 
-      ctx.fillStyle = PALETTE.snakeHi;
+      ctx.fillStyle = P.snakeHi;
       ctx.fillRect(x + 4, y + 4, 7, 3);
-      ctx.fillStyle = PALETTE.snakeLo;
+      ctx.fillStyle = P.snakeLo;
       ctx.fillRect(x + 4, y + CELL - 7, CELL - 8, 3);
     }
 
@@ -455,7 +550,7 @@ export class Game {
       const ey = y + eyes[i][1];
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(ex, ey, 5, 5);
-      ctx.fillStyle = PALETTE.eye;
+      ctx.fillStyle = this.palette.outline;
       ctx.fillRect(ex + pupil[0], ey + pupil[1], 3, 3);
     }
 

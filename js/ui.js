@@ -31,6 +31,8 @@ export function initUI(callbacks) {
   els.btnResume = document.getElementById('btn-resume');
   els.btnPause = document.getElementById('btn-pause');
   els.btnSound = document.getElementById('btn-sound');
+  els.btnColor = document.getElementById('btn-color');
+  els.swatch = document.getElementById('color-swatch');
 
   if (els.score) els.score.textContent = pad(0);
   if (els.high) els.high.textContent = pad(getHighScore());
@@ -60,6 +62,14 @@ export function initUI(callbacks) {
     els.btnSound.addEventListener('click', (e) => {
       e.preventDefault();
       if (cbs.onSoundToggle) cbs.onSoundToggle();
+    });
+  }
+
+  if (els.btnColor) {
+    els.btnColor.addEventListener('click', (e) => {
+      e.preventDefault();
+      playSfx('btn');
+      if (cbs.onColorToggle) cbs.onColorToggle();
     });
   }
 
@@ -138,4 +148,12 @@ export function setMuted(muted) {
   els.btnSound.textContent = muted ? '🔇' : '🔊';
   els.btnSound.setAttribute('aria-pressed', muted ? 'true' : 'false');
   els.btnSound.setAttribute('aria-label', muted ? 'Activar sonido' : 'Desactivar sonido');
+}
+
+export function setPaletteUI(name, hex) {
+  if (els.swatch && hex) els.swatch.style.background = hex;
+  if (els.btnColor) {
+    els.btnColor.setAttribute('aria-label', 'Color de la serpiente: ' + name + '. Cambiar color');
+    els.btnColor.setAttribute('title', 'Color: ' + name);
+  }
 }

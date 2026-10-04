@@ -20,6 +20,9 @@
         </div>
       </div>
       <div class="hud__actions">
+        <button id="btn-color" class="icon-btn" type="button" aria-label="Color de la serpiente" title="Cambiar color">
+          <span class="swatch" id="color-swatch" aria-hidden="true"></span>
+        </button>
         <button id="btn-sound" class="icon-btn" type="button" aria-label="Desactivar sonido" aria-pressed="false">🔊</button>
         <button id="btn-pause" class="icon-btn" type="button" aria-label="Pausar juego" disabled>⏸</button>
       </div>
@@ -78,12 +81,12 @@
   <pre id="out">RUNNING</pre>
 
   <script type="module">
-    import { Game, COLS, ROWS, VIEW } from '../js/game.js';
+    import { Game, COLS, ROWS, VIEW, SNAKE_PALETTES } from '../js/game.js';
     import { rectsOverlap, cellRect, insideBounds, checkCollision } from '../js/collision.js';
     import { Snake, START_LENGTH } from '../js/snake.js';
-    import { FoodField, GOLD_TTL } from '../js/food.js';
-    import { getHighScore, saveHighScore, getMuted, setMuted } from '../js/storage.js';
-    import { initUI, setScore, showState, showGameOver, setMuted as setMutedUI } from '../js/ui.js';
+    import { FoodField, GOLD_TTL, CLOCK_TTL } from '../js/food.js';
+    import { getHighScore, saveHighScore, getMuted, setMuted, getPalette, setPalette } from '../js/storage.js';
+    import { initUI, setScore, showState, showGameOver, setMuted as setMutedUI, setPaletteUI } from '../js/ui.js';
     import { initInput } from '../js/input.js';
     import { setAudioMuted, isAudioMuted } from '../js/audio.js';
 
@@ -150,8 +153,10 @@
     async function run() {
       const KEY_SCORE = 'pixelSnakeHighScore';
       const KEY_MUTE = 'pixelSnakeMuted';
+      const KEY_PAL = 'pixelSnakePalette';
       localStorage.removeItem(KEY_SCORE);
       localStorage.removeItem(KEY_MUTE);
+      localStorage.removeItem(KEY_PAL);
 
       /* ---------- 1. estructura de index.html ---------- */
       const html = await fetch('../index.html').then((r) => r.text());
@@ -227,6 +232,18 @@
       for (let i = 0; i < 5; i++) ff2.onAppleEaten(sf2);
       ok('food:gold-aparece-cada-5', ff2.gold !== null);
 
+      const fc = new FoodField(COLS, ROWS);
+      const sc = new Snake(COLS, ROWS);
+      fc.spawn(sc);
+      fc.spawnClock(sc);
+      ok('food:reloj-en-tablero',
+        fc.clock &&
+        fc.clock.x >= 0 && fc.clock.x < COLS &&
+        fc.clock.y >= 0 && fc.clock.y < ROWS &&
+        !sc.occupies(fc.clock.x, fc.clock.y));
+      fc.update(CLOCK_TTL + 0.5);
+      ok('food:reloj-caduca', fc.clock === null);
+
       /* ---------- 5. game (bucle con rAF shim) ---------- */
       let lastAction = null;
       const events = { state: null, score: null, over: null };
@@ -257,12 +274,16 @@
 
       game.handle('confirm');
       eq('game:inicia', game.state, 'playing');
+      ok('game:reloj-inicial', game.food.clock !== null);
+      eq('game:velocidad-base-lenta', game.stepInterval(), 0.19);
 
       game.food.apple = { x: 14, y: 14 };
       const head0 = { x: game.snake.head.x, y: game.snake.head.y };
       frames(20);
       eq('game:avanza-un-turno', game.snake.head.x, head0.x + 1);
 
+      game.food.clock = null;
+      game.slowT = 0;
       game.food.apple = { x: game.snake.head.x + 1, y: game.snake.head.y };
       const lenBefore = game.snake.length;
       pumpUntil(() => game.score > 0);
@@ -281,6 +302,18 @@
       game.handle('left');
       eq('game:ignora-inversa', game.snake.dir, 'right');
 
+      /* reloj: ralentiza la serpiente durante unos segundos */
+      game.slowT = 0;
+      game.food.clock = null;
+      game.food.apple = null;
+      const stepNormal = game.stepInterval();
+      game.food.clock = { x: game.snake.head.x + 1, y: game.snake.head.y, ttl: CLOCK_TTL };
+      pumpUntil(() => game.slowT > 0, 10, 120);
+      ok('game:reloj-ralentiza', game.slowT > 0);
+      ok('game:reloj-aumenta-intervalo', game.stepInterval() > stepNormal);
+      game.slowT = 0;
+
+      /* las paredes se atraviesan sin morir (wrap) */
       game.snake.body = [
         { x: COLS - 1, y: 2 },
         { x: COLS - 2, y: 2 },
@@ -289,9 +322,28 @@
       game.snake.queue = [];
       game.snake.dir = 'right';
       game.food.gold = null;
+      game.food.clock = null;
       game.food.apple = { x: 1, y: 1 };
+      game.clockTimer = 0;
+      pumpUntil(() => game.snake.head.x === 0 || game.state === 'dead', 10, 200);
+      eq('game:traspasa-pared', game.snake.head.x, 0);
+      eq('game:no-muere-en-pared', game.state, 'playing');
+
+      /* la muerte sigue existiendo: chocar el propio cuerpo */
+      game.snake.body = [
+        { x: 8, y: 5 },
+        { x: 9, y: 5 },
+        { x: 10, y: 5 },
+        { x: 11, y: 5 }
+      ];
+      game.snake.queue = [];
+      game.snake.dir = 'right';
+      game.food.apple = { x: 1, y: 1 };
+      game.food.gold = null;
+      game.food.clock = null;
+      game.clockTimer = 0;
       pumpUntil(() => game.state === 'dead');
-      eq('game:muerde-pared', game.state, 'dead');
+      eq('game:muerde-su-cuerpo', game.state, 'dead');
 
       pumpUntil(() => events.over !== null);
       ok('game:game-over-disparado', events.over !== null);
@@ -311,10 +363,21 @@
       ok('ui:pausa-visible', !document.getElementById('panel-pause').hidden);
       game.handle('pause');
 
+      const palBefore = game.paletteName;
+      const palNext = game.cyclePalette();
+      ok('game:paleta-cicla', palNext !== palBefore && !!SNAKE_PALETTES[palNext]);
+      eq('game:paleta-invalida-verde', game.setPalette('desconocida'), 'verde');
+      game.setPalette(palBefore);
+
       setMutedUI(true);
       eq('ui:mute-on', document.getElementById('btn-sound').getAttribute('aria-pressed'), 'true');
       setMutedUI(false);
       eq('ui:mute-off', document.getElementById('btn-sound').getAttribute('aria-pressed'), 'false');
+
+      setPaletteUI('azul', '#4cc9f0');
+      eq('ui:paleta-label',
+        document.getElementById('btn-color').getAttribute('aria-label'),
+        'Color de la serpiente: azul. Cambiar color');
 
       const rUp = document.getElementById('btn-up').getBoundingClientRect();
       const rRight = document.getElementById('btn-right').getBoundingClientRect();
@@ -352,6 +415,10 @@
       ok('storage:mute-true', getMuted() === true);
       setMuted(false);
       ok('storage:mute-false', getMuted() === false);
+
+      setPalette('morado');
+      eq('storage:paleta-guarda', getPalette(), 'morado');
+      eq('storage:paleta-persiste', localStorage.getItem(KEY_PAL), 'morado');
     }
 
     run()

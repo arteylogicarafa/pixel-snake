@@ -2,7 +2,7 @@
    service-worker.js · cache-first para uso offline
    ========================================================= */
 
-const CACHE = 'pixel-snake-v1';
+const CACHE = 'pixel-snake-v2';
 
 const ASSETS = [
   './',

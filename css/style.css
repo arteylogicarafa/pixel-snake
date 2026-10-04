@@ -195,6 +195,15 @@ body {
   opacity: 0.4;
 }
 
+.swatch {
+  display: block;
+  width: 18px;
+  height: 18px;
+  background: var(--accent);
+  border: 2px solid var(--shadow);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
 /* ===== 2. ESCENARIO ===== */
 
 .stage {

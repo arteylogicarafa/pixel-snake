@@ -20,6 +20,9 @@
         </div>
       </div>
       <div class="hud__actions">
+        <button id="btn-color" class="icon-btn" type="button" aria-label="Color de la serpiente" title="Cambiar color">
+          <span class="swatch" id="color-swatch" aria-hidden="true"></span>
+        </button>
         <button id="btn-sound" class="icon-btn" type="button" aria-label="Desactivar sonido" aria-pressed="false">🔊</button>
         <button id="btn-pause" class="icon-btn" type="button" aria-label="Pausar juego" disabled>⏸</button>
       </div>
@@ -111,6 +114,8 @@
     game.snake.queue = [];
     game.food.apple = { x: 12, y: 8 };
     game.food.gold = { x: 12, y: 3, ttl: 5 };
+    game.food.clock = { x: 4, y: 3, ttl: 5 };
+    game.slowT = 4;
     game.score = 240;
     game.time = 0.4;
     game.pushScore();

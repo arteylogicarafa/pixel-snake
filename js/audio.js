@@ -109,6 +109,11 @@ export function playSfx(name) {
       blip({ type: 'triangle', f0: 988, dur: 0.08, vol: 0.3, delay: 0.08 });
       blip({ type: 'triangle', f0: 1319, dur: 0.16, vol: 0.3, delay: 0.16 });
       break;
+    case 'clock':
+      blip({ type: 'square', f0: 880, dur: 0.05, vol: 0.22 });
+      blip({ type: 'square', f0: 1108, dur: 0.05, vol: 0.22, delay: 0.08 });
+      blip({ type: 'square', f0: 1319, dur: 0.14, vol: 0.24, delay: 0.16 });
+      break;
     case 'start':
       blip({ type: 'square', f0: 392, dur: 0.09, vol: 0.24 });
       blip({ type: 'square', f0: 587, dur: 0.13, vol: 0.24, delay: 0.1 });

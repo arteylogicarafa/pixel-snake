@@ -1,11 +1,12 @@
 /* =========================================================
-   food.js · manzana normal + bonus dorado con caducidad
+   food.js · manzana, bonus dorado y reloj temporal
    ========================================================= */
 
 export const NORMAL_PTS = 10;
 export const GOLD_PTS = 50;
 export const GOLD_TTL = 6;
 export const GOLD_EVERY = 5;
+export const CLOCK_TTL = 7;
 
 export class FoodField {
   constructor(cols, rows) {
@@ -17,6 +18,7 @@ export class FoodField {
   reset() {
     this.apple = null;
     this.gold = null;
+    this.clock = null;
     this.eaten = 0;
     this.time = 0;
   }
@@ -27,6 +29,10 @@ export class FoodField {
       this.gold.ttl -= dt;
       if (this.gold.ttl <= 0) this.gold = null;
     }
+    if (this.clock) {
+      this.clock.ttl -= dt;
+      if (this.clock.ttl <= 0) this.clock = null;
+    }
   }
 
   isFree(col, row, snake) {
@@ -34,6 +40,7 @@ export class FoodField {
     if (snake.occupies(col, row)) return false;
     if (this.apple && this.apple.x === col && this.apple.y === row) return false;
     if (this.gold && this.gold.x === col && this.gold.y === row) return false;
+    if (this.clock && this.clock.x === col && this.clock.y === row) return false;
     return true;
   }
 
@@ -57,6 +64,12 @@ export class FoodField {
     return this.apple;
   }
 
+  spawnClock(snake) {
+    this.clock = this.freeCell(snake);
+    if (this.clock) this.clock.ttl = CLOCK_TTL;
+    return this.clock;
+  }
+
   /* tras cada manzana comprobada nació el bonus dorado */
   onAppleEaten(snake) {
     this.eaten++;
@@ -72,5 +85,9 @@ export class FoodField {
 
   eatGold() {
     this.gold = null;
+  }
+
+  eatClock() {
+    this.clock = null;
   }
 }
